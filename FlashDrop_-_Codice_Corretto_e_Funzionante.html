@@ -1002,20 +1002,85 @@
       updatePeerDisplay();
       syncProfileUI();
       initSwipeSlider();
-      syncAmountDisplays(amountInput.value);
 
-      // Check URL parameters for Receiver Mode
+      // Parametri URL universali: supporta sia 'q', 'peer', 'amount' sia la modalità receive
       const params = new URLSearchParams(window.location.search);
       const action = params.get('action');
       const from = params.get('from');
-      const amount = params.get('amount');
+      const amountParam = params.get('amount');
+      const q = params.get('q');
+      const peerParam = params.get('peer');
 
-      if (action === 'receive' || (from && amount)) {
+      // 1. Gestione Parametro Quota / Amount
+      if (amountParam) {
+        const parsed = parseFloat(amountParam);
+        if (!isNaN(parsed) && parsed > 0) {
+          amountInput.value = parsed.toFixed(2);
+          amountRangeSlider.value = Math.min(100, Math.max(1, parsed));
+          syncAmountDisplays(parsed);
+
+          // Aggiorna pills veloci se corrisponde
+          amtButtons.forEach(btn => {
+            if (parseFloat(btn.dataset.val) === parsed) {
+              btn.className = 'amt-btn px-3 py-1 rounded-full bg-blue-600/30 border border-blue-500 text-xs font-mono font-bold text-blue-400 active:scale-95 transition';
+            } else {
+              btn.className = 'amt-btn px-3 py-1 rounded-full glass-card text-xs font-mono font-semibold text-zinc-300 hover:text-white hover:border-blue-500 active:scale-95 transition';
+            }
+          });
+        }
+      } else {
+        syncAmountDisplays(amountInput.value);
+      }
+
+      // 2. Gestione Parametro Causale 'q'
+      if (q) {
+        const cleanQ = q.trim().toLowerCase();
+        let matched = false;
+        reasonPills.forEach(btn => {
+          if (btn.dataset.r.toLowerCase().includes(cleanQ)) {
+            btn.click();
+            matched = true;
+          }
+        });
+        if (!matched) {
+          selectedReason = `📌 ${q}`;
+        }
+      }
+
+      // 3. Gestione Parametro Destinatario 'peer'
+      if (peerParam) {
+        const cleanPeer = peerParam.trim().toLowerCase();
+        const found = KNOWN_PEERS.find(p => 
+          p.tag.toLowerCase().includes(cleanPeer) || 
+          p.name.toLowerCase().includes(cleanPeer) ||
+          p.id.toLowerCase() === cleanPeer
+        );
+
+        if (found) {
+          currentPeer = found;
+          updatePeerDisplay();
+        } else {
+          // Destinatario personalizzato al volo
+          const customTag = cleanPeer.startsWith('@') ? cleanPeer : `@${cleanPeer.replace(/\s+/g, '_')}`;
+          const newPeer = {
+            id: 'custom_' + Date.now(),
+            name: peerParam,
+            tag: customTag,
+            initial: peerParam.charAt(0).toUpperCase() || 'P'
+          };
+          KNOWN_PEERS.unshift(newPeer);
+          currentPeer = newPeer;
+          updatePeerDisplay();
+        }
+      }
+
+      // 4. Modalità Ricevente AirDrop (?action=receive oppure mittente esplicito)
+      if (action === 'receive' || (from && amountParam)) {
         incomingData = {
           from: from || 'Un tuo amico',
           fromTag: params.get('fromTag') || '@amico',
-          amount: parseFloat(amount || '15.00').toFixed(2),
-          reason: params.get('reason') || '🍕 Pizza',
+          amount: parseFloat(amountParam || '15.00').toFixed(2),
+          reason: params.get('reason') || selectedReason,
           iban: params.get('iban') || myUser.iban,
           revolut: params.get('revolut') || myUser.revolut,
           paypal: params.get('paypal') || myUser.paypal,
